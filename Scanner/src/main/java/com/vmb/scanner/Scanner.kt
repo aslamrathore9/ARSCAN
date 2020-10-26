@@ -139,7 +139,7 @@ object Scanner {
                 .build()
 
         //    specify the formats to recognize:
-        val scanner = BarcodeScanning.getClient(options)
+        val scanner = BarcodeScanning.getClient(/*options*/)
 
         private fun ByteBuffer.toByteArray(): ByteArray {
             rewind()    // Rewind the buffer to zero
