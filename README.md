@@ -1,5 +1,5 @@
 # MLKitScanner
-MLKitScanner is a android librbary to scan QRCode, Barcode and etc.
+MLKitScanner is a android library to scan QRCode, Barcode and etc.
 Build with help of camerax codes with google MLKit which is using play services for model.
 
 Library for Java and Kotlin both.
@@ -20,7 +20,7 @@ in build.gradle (Project)
 
 ```bash
 
-implementation 'com.github.vidheyMB:MLKitScanner:2490a4b210'
+implementation 'com.github.vidheyMB:MLKitScanner:v0.1'
 
 ```
 in build.gradle (Module)
