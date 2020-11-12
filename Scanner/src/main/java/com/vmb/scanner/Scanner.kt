@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
+import android.content.res.AssetFileDescriptor
 import android.media.MediaPlayer
 import android.os.Build
 import android.util.Log
@@ -31,6 +32,7 @@ object Scanner {
 
     private const val TAG = "Scanner"
     private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
+
     public const val REQUEST_CODE_PERMISSIONS = 10
     private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
 
@@ -42,12 +44,15 @@ object Scanner {
     private lateinit var cameraExecutor: ExecutorService
 
     private val scanCodes = ArrayList<String>()
+    private var pauseScan: Boolean = false
 
-    private var mediaPlayer: MediaPlayer? = null
+    public var mediaPlayer: MediaPlayer? = null
+    private var mutePlayer: Boolean = false
 
     fun allPermissionsGranted(context: Context) = REQUIRED_PERMISSIONS.all {
         ContextCompat.checkSelfPermission(
-                context, it) == PackageManager.PERMISSION_GRANTED
+            context, it
+        ) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun mediaPlayer(context: Context) {
@@ -58,6 +63,10 @@ object Scanner {
         }
     }
 
+    fun setBeepSound(afd: AssetFileDescriptor){
+        mediaPlayer?.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength())
+    }
+
     fun startScanner(context: Context, viewFinder: PreviewView, scannerListener: ScannerListener) {
 
         if (allPermissionsGranted(context)) {
@@ -65,11 +74,20 @@ object Scanner {
             camera(context, context as AppCompatActivity, viewFinder, scannerListener)
         } else {
             Log.d(TAG, "Permissions not granted by the user.")
-            ActivityCompat.requestPermissions(context as Activity, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
+            ActivityCompat.requestPermissions(
+                context as Activity,
+                REQUIRED_PERMISSIONS,
+                REQUEST_CODE_PERMISSIONS
+            )
         }
     }
 
-    private fun camera(context: Context, lifecycleOwner: LifecycleOwner, viewFinder: PreviewView, scannerListener: ScannerListener) {
+    private fun camera(
+        context: Context,
+        lifecycleOwner: LifecycleOwner,
+        viewFinder: PreviewView,
+        scannerListener: ScannerListener
+    ) {
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
@@ -82,31 +100,35 @@ object Scanner {
 
             // Preview
             val preview = Preview.Builder()
-                    .build()
-                    .also {
-                        it.setSurfaceProvider(viewFinder.createSurfaceProvider())
-                    }
+                .build()
+                .also {
+                    it.setSurfaceProvider(viewFinder.createSurfaceProvider())
+                }
 
             if (imageCapture == null)
                 imageCapture = ImageCapture.Builder()
-                        .build()
+                    .build()
 
             val imageAnalyzer = ImageAnalysis.Builder()
-                    .build()
-                    .also {
-                        it.setAnalyzer(cameraExecutor, LuminosityAnalyzer { luma ->
-                            if (luma != "0" && !scanCodes.contains(luma)) {
+                .build()
+                .also {
+                    it.setAnalyzer(cameraExecutor, LuminosityAnalyzer { luma ->
+                        if (luma != "0" && !scanCodes.contains(luma)) {
 
-                                Log.d(TAG, "Scan Code : $luma")
+                            Log.d(TAG, "Scan Code : $luma")
+
+                            scanCodes.add(luma)
+                            scannerListener.onSuccess(luma)
+
+                            if (!mutePlayer)
                                 mediaPlayer?.start()
-                                scanCodes.add(luma)
-                                scannerListener.onSuccess(luma)
 
-                            } else if (scanCodes.contains(luma)) {
-                                Log.e(TAG, "Scan Code : $luma already exists")
-                            }
-                        })
-                    }
+                        } else if (scanCodes.contains(luma)) {
+                            Log.e(TAG, "Scan Code : $luma already exists")
+                            scannerListener.onFailed("already exists")
+                        }
+                    })
+                }
 
             // Select back camera as a default
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
@@ -117,7 +139,8 @@ object Scanner {
 
                 // Bind use cases to camera
                 cameraProvider?.bindToLifecycle(
-                        lifecycleOwner, cameraSelector, preview, imageCapture, imageAnalyzer)
+                    lifecycleOwner, cameraSelector, preview, imageCapture, imageAnalyzer
+                )
 
             } catch (exc: Exception) {
                 Log.e(TAG, "Use case binding failed", exc)
@@ -127,9 +150,21 @@ object Scanner {
 
     }
 
-    fun pauseCamera() {
+    fun pauseScan() {
         // Unbind use cases before rebinding
-        cameraProvider?.unbindAll()
+//        cameraProvider?.unbindAll()
+        pauseScan = true
+        Log.d(TAG, "Scanner is Paused")
+    }
+
+    fun resumeScan() {
+        pauseScan = false
+        Log.d(TAG, "Scanner is Resumed")
+    }
+
+    fun muteBeepSound(mute: Boolean) {
+        mutePlayer = mute
+        Log.d(TAG, "Scanner sound is muted")
     }
 
     private class LuminosityAnalyzer(private val listener: LumaListener) : ImageAnalysis.Analyzer {
@@ -154,12 +189,19 @@ object Scanner {
 
             val mediaImage = imageProxy.image
             if (mediaImage != null) {
-                val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+                val image = InputImage.fromMediaImage(
+                    mediaImage,
+                    imageProxy.imageInfo.rotationDegrees
+                )
+
                 // Pass image to an ML Kit Vision API
                 val result = scanner.process(image)
                         .addOnSuccessListener { barcodes ->
                             // Task completed successfully
                             // ...
+
+                            // pause or resume scanner
+                            if(pauseScan) return@addOnSuccessListener
 
                             for (barcode in barcodes) {
                                 val bounds = barcode.boundingBox
@@ -167,7 +209,10 @@ object Scanner {
 
                                 val rawValue = barcode.rawValue
 
-                                Log.d(TAG, "Scan Codes : Bounds = $bounds, Corners = $corners, RawValue = $rawValue ");
+                                Log.d(
+                                    TAG,
+                                    "Scan Codes : Bounds = $bounds, Corners = $corners, RawValue = $rawValue "
+                                );
 
                                 rawValue?.toString()?.let { listener(it) }
 

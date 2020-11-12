@@ -1,19 +1,36 @@
 package com.vmb.mlkitscanner
 
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import com.vmb.scanner.Scanner
 import com.vmb.scanner.ScannerListener
 import kotlinx.android.synthetic.main.activity_main.*
 
+
 class MainActivity : AppCompatActivity(), ScannerListener {
+
+    var pause: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        Scanner.startScanner(this, scannerPreView,this)
+        Scanner.startScanner(this, scannerPreView, this)
+
+        scannerPreView.setOnClickListener {
+            if(pause){
+                pause = false
+                Scanner.pauseScan()
+            }else{
+                pause = true
+                Scanner.resumeScan()
+            }
+        }
+
+//        Scanner.muteBeepSound(true)
+        val afd = assets.openFd("AudioFile.mp3")
+        Scanner.mediaPlayer?.setDataSource(afd.getFileDescriptor(),afd.getStartOffset(),afd.getLength())
     }
 
     override fun onRequestPermissionsResult(
@@ -27,18 +44,20 @@ class MainActivity : AppCompatActivity(), ScannerListener {
             if (Scanner.allPermissionsGranted(this)) {
                 Scanner.startScanner(this, scannerPreView, this);
             } else {
-                Toast.makeText(this,
+                Toast.makeText(
+                    this,
                     "Permissions not granted by the user.",
-                    Toast.LENGTH_SHORT).show();
+                    Toast.LENGTH_SHORT
+                ).show();
             }
         }
     }
 
     override fun onSuccess(scanCode: String) {
-        TODO("Not yet implemented")
+
     }
 
     override fun onFailed(response: String) {
-        TODO("Not yet implemented")
+
     }
 }
