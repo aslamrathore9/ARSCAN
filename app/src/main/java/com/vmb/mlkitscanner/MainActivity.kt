@@ -17,6 +17,7 @@ class MainActivity : AppCompatActivity(), ScannerListener {
         setContentView(R.layout.activity_main)
 
         Scanner.startScanner(this, scannerPreView, this)
+                .checkCodeExists(false)
 
         scannerPreView.setOnClickListener {
             if(pause){
@@ -29,8 +30,8 @@ class MainActivity : AppCompatActivity(), ScannerListener {
         }
 
 //        Scanner.muteBeepSound(true)
-        val afd = assets.openFd("AudioFile.mp3")
-        Scanner.mediaPlayer?.setDataSource(afd.getFileDescriptor(),afd.getStartOffset(),afd.getLength())
+//        val afd = assets.openFd("AudioFile.mp3")
+//        Scanner.mediaPlayer?.setDataSource(afd.getFileDescriptor(),afd.getStartOffset(),afd.getLength())
     }
 
     override fun onRequestPermissionsResult(

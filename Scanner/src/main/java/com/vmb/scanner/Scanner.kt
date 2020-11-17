@@ -31,9 +31,9 @@ typealias LumaListener = (luma: String) -> Unit
 object Scanner {
 
     private const val TAG = "Scanner"
-    private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
+    public const val Already_Code_Scanned = "Already Code Scanned"
 
-    public const val REQUEST_CODE_PERMISSIONS = 10
+    const val REQUEST_CODE_PERMISSIONS = 10
     private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
 
     private var imageCapture: ImageCapture? = null
@@ -46,12 +46,13 @@ object Scanner {
     private val scanCodes = ArrayList<String>()
     private var pauseScan: Boolean = false
 
-    public var mediaPlayer: MediaPlayer? = null
+    var mediaPlayer: MediaPlayer? = null
     private var mutePlayer: Boolean = false
+    private var isCheckCodeExists: Boolean = true
 
     fun allPermissionsGranted(context: Context) = REQUIRED_PERMISSIONS.all {
         ContextCompat.checkSelfPermission(
-            context, it
+                context, it
         ) == PackageManager.PERMISSION_GRANTED
     }
 
@@ -63,11 +64,12 @@ object Scanner {
         }
     }
 
-    fun setBeepSound(afd: AssetFileDescriptor){
+    fun setBeepSound(afd: AssetFileDescriptor): Scanner {
         mediaPlayer?.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength())
+        return this
     }
 
-    fun startScanner(context: Context, viewFinder: PreviewView, scannerListener: ScannerListener) {
+    fun startScanner(context: Context, viewFinder: PreviewView, scannerListener: ScannerListener): Scanner {
 
         if (allPermissionsGranted(context)) {
             mediaPlayer(context)
@@ -75,18 +77,20 @@ object Scanner {
         } else {
             Log.d(TAG, "Permissions not granted by the user.")
             ActivityCompat.requestPermissions(
-                context as Activity,
-                REQUIRED_PERMISSIONS,
-                REQUEST_CODE_PERMISSIONS
+                    context as Activity,
+                    REQUIRED_PERMISSIONS,
+                    REQUEST_CODE_PERMISSIONS
             )
         }
+
+        return this
     }
 
     private fun camera(
-        context: Context,
-        lifecycleOwner: LifecycleOwner,
-        viewFinder: PreviewView,
-        scannerListener: ScannerListener
+            context: Context,
+            lifecycleOwner: LifecycleOwner,
+            viewFinder: PreviewView,
+            scannerListener: ScannerListener
     ) {
 
         cameraExecutor = Executors.newSingleThreadExecutor()
@@ -100,35 +104,29 @@ object Scanner {
 
             // Preview
             val preview = Preview.Builder()
-                .build()
-                .also {
-                    it.setSurfaceProvider(viewFinder.createSurfaceProvider())
-                }
+                    .build()
+                    .also {
+                        it.setSurfaceProvider(viewFinder.createSurfaceProvider())
+                    }
 
             if (imageCapture == null)
                 imageCapture = ImageCapture.Builder()
-                    .build()
+                        .build()
 
             val imageAnalyzer = ImageAnalysis.Builder()
-                .build()
-                .also {
-                    it.setAnalyzer(cameraExecutor, LuminosityAnalyzer { luma ->
-                        if (luma != "0" && !scanCodes.contains(luma)) {
-
-                            Log.d(TAG, "Scan Code : $luma")
-
-                            scanCodes.add(luma)
-                            scannerListener.onSuccess(luma)
-
-                            if (!mutePlayer)
-                                mediaPlayer?.start()
-
-                        } else if (scanCodes.contains(luma)) {
-                            Log.e(TAG, "Scan Code : $luma already exists")
-                            scannerListener.onFailed("already exists")
-                        }
-                    })
-                }
+                    .build()
+                    .also {
+                        it.setAnalyzer(cameraExecutor, LuminosityAnalyzer { luma ->
+                            if (luma != "0" && !isCheckCodeExists) {
+                                scanSuccess(luma, scannerListener)
+                            } else if (luma != "0" && !scanCodes.contains(luma)) {
+                                scanSuccess(luma, scannerListener)
+                            } else if (scanCodes.contains(luma)) {
+                                Log.e(TAG, "Scan Code : $luma $Already_Code_Scanned")
+                                scannerListener.onFailed(Already_Code_Scanned)
+                            }
+                        })
+                    }
 
             // Select back camera as a default
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
@@ -139,7 +137,7 @@ object Scanner {
 
                 // Bind use cases to camera
                 cameraProvider?.bindToLifecycle(
-                    lifecycleOwner, cameraSelector, preview, imageCapture, imageAnalyzer
+                        lifecycleOwner, cameraSelector, preview, imageCapture, imageAnalyzer
                 )
 
             } catch (exc: Exception) {
@@ -148,6 +146,16 @@ object Scanner {
 
         }, ContextCompat.getMainExecutor(context))
 
+    }
+
+    private fun scanSuccess(luma: String, scannerListener: ScannerListener) {
+        Log.d(TAG, "Scan Code : $luma")
+
+        scanCodes.add(luma)
+        scannerListener.onSuccess(luma)
+
+        if (!mutePlayer)
+            mediaPlayer?.start()
     }
 
     fun pauseScan() {
@@ -162,9 +170,16 @@ object Scanner {
         Log.d(TAG, "Scanner is Resumed")
     }
 
-    fun muteBeepSound(mute: Boolean) {
+    fun checkCodeExists(isCheck: Boolean): Scanner {
+        isCheckCodeExists = isCheck
+        Log.d(TAG, "Scanner : Check code already scanned is $isCheck")
+        return this
+    }
+
+    fun muteBeepSound(mute: Boolean): Scanner {
         mutePlayer = mute
         Log.d(TAG, "Scanner sound is muted")
+        return this
     }
 
     private class LuminosityAnalyzer(private val listener: LumaListener) : ImageAnalysis.Analyzer {
@@ -187,56 +202,61 @@ object Scanner {
         @RequiresApi(Build.VERSION_CODES.KITKAT)
         override fun analyze(imageProxy: ImageProxy) {
 
-            val mediaImage = imageProxy.image
-            if (mediaImage != null) {
-                val image = InputImage.fromMediaImage(
-                    mediaImage,
-                    imageProxy.imageInfo.rotationDegrees
-                )
+            imageProxy.image.let { _mediaImage ->
 
-                // Pass image to an ML Kit Vision API
-                val result = scanner.process(image)
-                        .addOnSuccessListener { barcodes ->
-                            // Task completed successfully
-                            // ...
+                InputImage.fromMediaImage(
+                        _mediaImage!!,
+                        imageProxy.imageInfo.rotationDegrees
+                ).let { _image ->
 
-                            // pause or resume scanner
-                            if(pauseScan) return@addOnSuccessListener
+                    // Pass image to an ML Kit Vision API
+                    scanner.process(_image)
+                            .addOnSuccessListener { barcodes ->
+                                // Task completed successfully
+                                // ...
 
-                            for (barcode in barcodes) {
-                                val bounds = barcode.boundingBox
-                                val corners = barcode.cornerPoints
+                                // pause or resume scanner
+                                if (pauseScan) return@addOnSuccessListener
 
-                                val rawValue = barcode.rawValue
+                                for (barcode in barcodes) {
+                                    val bounds = barcode.boundingBox
+                                    val corners = barcode.cornerPoints
 
-                                Log.d(
-                                    TAG,
-                                    "Scan Codes : Bounds = $bounds, Corners = $corners, RawValue = $rawValue "
-                                );
+                                    val rawValue = barcode.rawValue
 
-                                rawValue?.toString()?.let { listener(it) }
+                                    Log.d(
+                                            TAG,
+                                            "Scan Codes : Bounds = $bounds, Corners = $corners, RawValue = $rawValue "
+                                    );
 
-                                val valueType = barcode.valueType
-                                // See API reference for complete list of supported types
-                                when (valueType) {
-                                    Barcode.TYPE_WIFI -> {
-                                        val ssid = barcode.wifi!!.ssid
-                                        val password = barcode.wifi!!.password
-                                        val type = barcode.wifi!!.encryptionType
-                                    }
-                                    Barcode.TYPE_URL -> {
-                                        val title = barcode.url!!.title
-                                        val url = barcode.url!!.url
+                                    rawValue?.toString()?.let { listener(it) }
+
+                                    val valueType = barcode.valueType
+                                    // See API reference for complete list of supported types
+                                    when (valueType) {
+                                        Barcode.TYPE_WIFI -> {
+                                            val ssid = barcode.wifi!!.ssid
+                                            val password = barcode.wifi!!.password
+                                            val type = barcode.wifi!!.encryptionType
+                                        }
+                                        Barcode.TYPE_URL -> {
+                                            val title = barcode.url!!.title
+                                            val url = barcode.url!!.url
+                                        }
                                     }
                                 }
+
+                            }
+                            .addOnFailureListener {
+                                // Task failed with an exception
+                                // ...
+                                it.printStackTrace()
                             }
 
-                        }
-                        .addOnFailureListener {
-                            // Task failed with an exception
-                            // ...
-                            it.printStackTrace()
-                        }
+                }
+
+            }.addOnCompleteListener {
+
             }
 
             val buffer = imageProxy.planes[0].buffer
