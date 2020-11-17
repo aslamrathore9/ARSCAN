@@ -4,6 +4,9 @@ Build with help of camerax codes with google MLKit which is using play services 
 
 Library for Java and Kotlin both.
 
+[![](https://jitpack.io/v/vidheyMB/MLKitScanner.svg)](https://jitpack.io/#vidheyMB/MLKitScanner)
+
+
 ## Installation
 
 ```bash
@@ -20,7 +23,7 @@ in build.gradle (Project)
 
 ```bash
 
-implementation 'com.github.vidheyMB:MLKitScanner:v0.1'
+implementation 'com.github.vidheyMB:MLKitScanner:v0.1.1'
 
 ```
 in build.gradle (Module)
