@@ -9,6 +9,7 @@ import android.content.res.AssetFileDescriptor
 import android.media.MediaPlayer
 import android.os.Build
 import android.util.Log
+import android.util.Size
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
@@ -31,7 +32,7 @@ typealias LumaListener = (luma: String) -> Unit
 object Scanner {
 
     private const val TAG = "Scanner"
-    public const val Already_Code_Scanned = "Already Code Scanned"
+    const val Already_Code_Scanned = "Already Code Scanned"
 
     const val REQUEST_CODE_PERMISSIONS = 10
     private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
@@ -49,6 +50,13 @@ object Scanner {
     var mediaPlayer: MediaPlayer? = null
     private var mutePlayer: Boolean = false
     private var isCheckCodeExists: Boolean = true
+
+    // camera resolution options
+    lateinit var camera_resolution: Size
+    val Low_Resolution = Size(176,144)
+    val Medium_Resolution = Size(352,288)
+    val High_Resolution = Size(640,480)
+
 
     fun allPermissionsGranted(context: Context) = REQUIRED_PERMISSIONS.all {
         ContextCompat.checkSelfPermission(
@@ -72,6 +80,8 @@ object Scanner {
     fun startScanner(context: Context, viewFinder: PreviewView, scannerListener: ScannerListener): Scanner {
 
         if (allPermissionsGranted(context)) {
+            // default set resolution to Low
+            camera_resolution = Low_Resolution
             mediaPlayer(context)
             camera(context, context as AppCompatActivity, viewFinder, scannerListener)
         } else {
@@ -111,6 +121,7 @@ object Scanner {
 
             if (imageCapture == null)
                 imageCapture = ImageCapture.Builder()
+                        .setTargetResolution(camera_resolution)
                         .build()
 
             val imageAnalyzer = ImageAnalysis.Builder()
@@ -179,6 +190,12 @@ object Scanner {
     fun muteBeepSound(mute: Boolean): Scanner {
         mutePlayer = mute
         Log.d(TAG, "Scanner sound is muted")
+        return this
+    }
+
+    fun setResolution(resolution: Size): Scanner {
+        camera_resolution = resolution
+        Log.d(TAG, "Resolution set to $resolution")
         return this
     }
 
