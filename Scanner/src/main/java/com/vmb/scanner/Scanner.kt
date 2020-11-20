@@ -238,9 +238,6 @@ object Scanner {
             // Calculate the average luma no more often than every second
             if (currentTimestamp - lastAnalyzedTimestamp >= 500) {
 
-                // pause or resume scanner
-                if (pauseScan) return
-
                 imageProxy.image.let { _mediaImage ->
 
                     InputImage.fromMediaImage(

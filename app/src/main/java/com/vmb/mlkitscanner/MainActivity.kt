@@ -19,6 +19,7 @@ class MainActivity : AppCompatActivity(), ScannerListener {
         Scanner.startScanner(this, scannerPreView, this)
                 .checkCodeExists(false)
                 .setResolution(Scanner.Low_Resolution)
+                .logPrint(true)
 
         scannerPreView.setOnClickListener {
             if(pause){
