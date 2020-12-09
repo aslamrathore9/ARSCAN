@@ -23,7 +23,7 @@ in build.gradle (Project)
 
 ```bash
 
-implementation 'com.github.vidheyMB:MLKitScanner:v0.1.1'
+implementation 'com.github.vidheyMB:MLKitScanner:v0.1.5'
 
 ```
 in build.gradle (Module)
@@ -47,11 +47,26 @@ in activity_main.xml
 
 ```kotlin
 
-Scanner.startScanner(this, scannerPreView,this)
+Scanner.startScanner(requireContext(), scannerPreView, this)
+            .checkCodeExists(false)    // check code already scanned
+            .setResolution(Scanner.Low_Resolution)  // set camera resolution
+            .logPrint(true)                      // print logs
+            .muteBeepSound(true)  // beep sound on scan
 
 ```
 
-in MainActivity.kt
+in MainActivity.kt 
+
+Optional for Scanner
+
+.checkCodeExists(true) -> it will check for the code is already scanned or not for that session
+
+.setResolution(Scanner.Low_Resolution) -> set your desired resolution, for best performance set Low_Resolution
+
+.muteBeepSound(true) -> it will enable or disable of beep sound
+
+.logPrint(true) -> print the log
+
 
 ```kotlin
 
@@ -93,7 +108,11 @@ class MainActivity : AppCompatActivity(), ScannerListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        Scanner.startScanner(this, scannerPreView,this)
+        Scanner.startScanner(requireContext(), scannerPreView, this)
+            .checkCodeExists(false)
+            .setResolution(Scanner.Low_Resolution)
+            .logPrint(true)
+            .muteBeepSound(true)
     }
 
     override fun onRequestPermissionsResult(
