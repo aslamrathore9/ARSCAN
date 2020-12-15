@@ -35,6 +35,10 @@ object Scanner {
     private const val TAG = "Scanner"
     const val Already_Code_Scanned = "Already Code Scanned"
 
+    private lateinit var context: Context
+    private lateinit var viewFinder: PreviewView
+    private lateinit var scannerListener: ScannerListener
+
     const val REQUEST_CODE_PERMISSIONS = 10
     private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
 
@@ -52,21 +56,25 @@ object Scanner {
     private var mutePlayer: Boolean = false
     private lateinit var barCodeValue: String
 
+    // Select back camera as a default
+    private var cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+    val FrontCamera = 101
+    val BackCamera = 102
+
     private var isCheckCodeExists: Boolean = true
+
     // default set log print false
     private var printLog: Boolean = false
 
     // camera resolution options
-    lateinit var camera_resolution: Size
+    private lateinit var camera_resolution: Size
     val Low_Resolution = Size(176, 144)
     val Medium_Resolution = Size(352, 288)
     val High_Resolution = Size(640, 480)
 
 
     fun allPermissionsGranted(context: Context) = REQUIRED_PERMISSIONS.all {
-        ContextCompat.checkSelfPermission(
-                context, it
-        ) == PackageManager.PERMISSION_GRANTED
+        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun mediaPlayer(context: Context) {
@@ -77,12 +85,12 @@ object Scanner {
         }
     }
 
-    fun setBeepSound(afd: AssetFileDescriptor): Scanner {
-        mediaPlayer?.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength())
-        return this
-    }
-
     fun startScanner(context: Context, viewFinder: PreviewView, scannerListener: ScannerListener): Scanner {
+
+        // set context
+        this.context = context
+        this.viewFinder = viewFinder
+        this.scannerListener = scannerListener
 
         // initial value set
         barCodeValue = ""
@@ -149,16 +157,14 @@ object Scanner {
                     }
 
             // Select back camera as a default
-            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+//            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
             try {
                 // Unbind use cases before rebinding
                 cameraProvider?.unbindAll()
 
                 // Bind use cases to camera
-                cameraProvider?.bindToLifecycle(
-                        lifecycleOwner, cameraSelector, preview, imageCapture, imageAnalyzer
-                )
+                cameraProvider?.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageCapture, imageAnalyzer)
 
             } catch (exc: Exception) {
                 loge("Use case binding failed  $exc")
@@ -176,41 +182,6 @@ object Scanner {
 
         if (!mutePlayer)
             mediaPlayer?.start()
-    }
-
-    fun pauseScan() {
-        // Unbind use cases before rebinding
-//        cameraProvider?.unbindAll()
-        pauseScan = true
-        log("Scanner is Paused")
-    }
-
-    fun resumeScan() {
-        pauseScan = false
-        log("Scanner is Resumed")
-    }
-
-    fun checkCodeExists(isCheck: Boolean): Scanner {
-        isCheckCodeExists = isCheck
-        log("Scanner : Check code already scanned is $isCheck")
-        return this
-    }
-
-    fun muteBeepSound(mute: Boolean): Scanner {
-        mutePlayer = mute
-        log("Scanner sound is muted")
-        return this
-    }
-
-    fun setResolution(resolution: Size): Scanner {
-        camera_resolution = resolution
-        log("Resolution set to $resolution")
-        return this
-    }
-
-    fun logPrint(printLog: Boolean): Scanner {
-        this.printLog = printLog
-        return this
     }
 
     private class LuminosityAnalyzer(private val listener: LumaListener) : ImageAnalysis.Analyzer {
@@ -335,7 +306,6 @@ object Scanner {
         log("onDestroy: Scanner")
     }
 
-
     private fun log(d: String) {
         if (printLog)
             Log.d(TAG, d)
@@ -345,4 +315,71 @@ object Scanner {
         if (printLog)
             Log.e(TAG, e)
     }
+
+
+    /**
+     *
+     *  Options of scanner ->
+     *      1. pauseScan
+     *      2. resumeScan
+     *      3. checkCodeExists
+     *      4. muteBeepSound
+     *      5. setResolution
+     *      6. logPrint
+     *      7. cameraSelect
+     *      8. setBeepSound
+     */
+
+    fun pauseScan() {
+        // Unbind use cases before rebinding
+//        cameraProvider?.unbindAll()
+        pauseScan = true
+        log("Scanner is Paused")
+    }
+
+    fun resumeScan() {
+        pauseScan = false
+        log("Scanner is Resumed")
+    }
+
+    fun checkCodeExists(isCheck: Boolean): Scanner {
+        isCheckCodeExists = isCheck
+        log("Scanner : Check code already scanned is $isCheck")
+        return this
+    }
+
+    fun muteBeepSound(mute: Boolean): Scanner {
+        mutePlayer = mute
+        log("Scanner sound is muted")
+        return this
+    }
+
+    fun setResolution(resolution: Size): Scanner {
+        camera_resolution = resolution
+        log("Resolution set to $resolution")
+        return this
+    }
+
+    fun logPrint(printLog: Boolean): Scanner {
+        this.printLog = printLog
+        return this
+    }
+
+    fun cameraSelect(Camera:Int): Scanner {
+        cameraSelector = if(Camera == BackCamera){
+            CameraSelector.DEFAULT_BACK_CAMERA
+        }else{
+            CameraSelector.DEFAULT_FRONT_CAMERA
+        }
+        // restart camera
+        startScanner(context, viewFinder, scannerListener)
+
+        return this
+    }
+
+    fun setBeepSound(afd: AssetFileDescriptor): Scanner {
+        mediaPlayer?.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength())
+        return this
+    }
+
 }
