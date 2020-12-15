@@ -33,6 +33,21 @@ import kotlin.collections.ArrayList
 
 typealias LumaListener = (luma: String) -> Unit
 
+/**
+ *  Scanner is module for Qr and Barcode scan
+ *
+ *  Options of setting in scanner ->
+ *      1. pauseScan
+ *      2. resumeScan
+ *      3. checkCodeExists
+ *      4. muteBeepSound
+ *      5. setResolution
+ *      6. logPrint
+ *      7. cameraSelect
+ *      8. setBeepSound
+ *      9. scanDelayTime
+ */
+
 object Scanner {
 
     private const val TAG = "Scanner"
@@ -41,6 +56,9 @@ object Scanner {
     private lateinit var context: Context
     private lateinit var viewFinder: PreviewView
     private lateinit var scannerListener: ScannerListener
+
+    // last scanned time
+    private var lastAnalyzedTimestamp = 0L
 
     const val REQUEST_CODE_PERMISSIONS = 10
     private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
@@ -75,6 +93,8 @@ object Scanner {
     val Medium_Resolution = Size(352, 288)
     val High_Resolution = Size(640, 480)
 
+    // scanner delay time set
+    private var scannerDelay:Long = 500L
 
     fun allPermissionsGranted(context: Context) = REQUIRED_PERMISSIONS.all {
         ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
@@ -152,13 +172,21 @@ object Scanner {
                 .build()
                 .also {
                     it.setAnalyzer(cameraExecutor, LuminosityAnalyzer { luma ->
-                        if (luma != "0" && !isCheckCodeExists) {
-                            scanSuccess(luma, scannerListener)
-                        } else if (luma != "0" && !scanCodes.contains(luma)) {
-                            scanSuccess(luma, scannerListener)
-                        } else if (scanCodes.contains(luma)) {
-                            loge("Scan Code : $luma $Already_Code_Scanned")
-                            scannerListener.onFailed(Already_Code_Scanned)
+
+                        val currentTimestamp = System.currentTimeMillis()
+                        // get
+                        if (currentTimestamp - lastAnalyzedTimestamp >= scannerDelay) {
+                            if (luma != "0" && !isCheckCodeExists) {
+                                scanSuccess(luma, scannerListener)
+                            } else if (luma != "0" && !scanCodes.contains(luma)) {
+                                scanSuccess(luma, scannerListener)
+                            } else if (scanCodes.contains(luma)) {
+                                loge("Scan Code : $luma $Already_Code_Scanned")
+                                scannerListener.onFailed(Already_Code_Scanned)
+                            }
+
+                            // Update timestamp of last analyzed frame
+                            lastAnalyzedTimestamp = currentTimestamp
                         }
                     })
                 }
@@ -312,6 +340,7 @@ object Scanner {
      *      6. logPrint
      *      7. cameraSelect
      *      8. setBeepSound
+     *      9. scanDelayTime
      */
 
     fun pauseScan() {
@@ -364,6 +393,13 @@ object Scanner {
     fun setBeepSound(afd: AssetFileDescriptor): Scanner {
         mediaPlayer?.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength())
         return this
+    }
+
+    /**
+     *   set value in milliseconds
+     */
+    fun scanDelayTime(delayMilliSeconds: Long){
+        scannerDelay = delayMilliSeconds
     }
 
 }
