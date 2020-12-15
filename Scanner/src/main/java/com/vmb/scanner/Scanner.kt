@@ -6,6 +6,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.AssetFileDescriptor
+import android.media.Image
 import android.media.MediaPlayer
 import android.os.Build
 import android.util.Log
@@ -24,9 +25,11 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
 import java.io.File
 import java.nio.ByteBuffer
+import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
+import kotlin.collections.ArrayList
+
 
 typealias LumaListener = (luma: String) -> Unit
 
@@ -85,7 +88,11 @@ object Scanner {
         }
     }
 
-    fun startScanner(context: Context, viewFinder: PreviewView, scannerListener: ScannerListener): Scanner {
+    fun startScanner(
+        context: Context,
+        viewFinder: PreviewView,
+        scannerListener: ScannerListener
+    ): Scanner {
 
         // set context
         this.context = context
@@ -103,9 +110,9 @@ object Scanner {
         } else {
             log("Permissions not granted by the user.")
             ActivityCompat.requestPermissions(
-                    context as Activity,
-                    REQUIRED_PERMISSIONS,
-                    REQUEST_CODE_PERMISSIONS
+                context as Activity,
+                REQUIRED_PERMISSIONS,
+                REQUEST_CODE_PERMISSIONS
             )
         }
 
@@ -113,10 +120,10 @@ object Scanner {
     }
 
     private fun camera(
-            context: Context,
-            lifecycleOwner: LifecycleOwner,
-            viewFinder: PreviewView,
-            scannerListener: ScannerListener
+        context: Context,
+        lifecycleOwner: LifecycleOwner,
+        viewFinder: PreviewView,
+        scannerListener: ScannerListener
     ) {
 
         cameraExecutor = Executors.newSingleThreadExecutor()
@@ -130,31 +137,31 @@ object Scanner {
 
             // Preview
             val preview = Preview.Builder()
-                    .build()
-                    .also {
-                        it.setSurfaceProvider(viewFinder.createSurfaceProvider())
-                    }
+                .build()
+                .also {
+                    it.setSurfaceProvider(viewFinder.createSurfaceProvider())
+                }
 
             if (imageCapture == null)
                 imageCapture = ImageCapture.Builder()
-                        .setTargetResolution(camera_resolution)
-                        .build()
+                    .setTargetResolution(camera_resolution)
+                    .build()
 
             val imageAnalyzer = ImageAnalysis.Builder()
-                    .setImageQueueDepth(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .build()
-                    .also {
-                        it.setAnalyzer(cameraExecutor, LuminosityAnalyzer { luma ->
-                            if (luma != "0" && !isCheckCodeExists) {
-                                scanSuccess(luma, scannerListener)
-                            } else if (luma != "0" && !scanCodes.contains(luma)) {
-                                scanSuccess(luma, scannerListener)
-                            } else if (scanCodes.contains(luma)) {
-                                loge("Scan Code : $luma $Already_Code_Scanned")
-                                scannerListener.onFailed(Already_Code_Scanned)
-                            }
-                        })
-                    }
+                .setImageQueueDepth(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build()
+                .also {
+                    it.setAnalyzer(cameraExecutor, LuminosityAnalyzer { luma ->
+                        if (luma != "0" && !isCheckCodeExists) {
+                            scanSuccess(luma, scannerListener)
+                        } else if (luma != "0" && !scanCodes.contains(luma)) {
+                            scanSuccess(luma, scannerListener)
+                        } else if (scanCodes.contains(luma)) {
+                            loge("Scan Code : $luma $Already_Code_Scanned")
+                            scannerListener.onFailed(Already_Code_Scanned)
+                        }
+                    })
+                }
 
             // Select back camera as a default
 //            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
@@ -164,7 +171,13 @@ object Scanner {
                 cameraProvider?.unbindAll()
 
                 // Bind use cases to camera
-                cameraProvider?.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageCapture, imageAnalyzer)
+                cameraProvider?.bindToLifecycle(
+                    lifecycleOwner,
+                    cameraSelector,
+                    preview,
+                    imageCapture,
+                    imageAnalyzer
+                )
 
             } catch (exc: Exception) {
                 loge("Use case binding failed  $exc")
@@ -188,8 +201,8 @@ object Scanner {
         private var lastAnalyzedTimestamp = 0L
 
         private val options = BarcodeScannerOptions.Builder()
-                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
-                .build()
+            .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+            .build()
 
         //    specify the formats to recognize:
         val scanner = BarcodeScanning.getClient(/*options*/)
@@ -201,101 +214,67 @@ object Scanner {
             return data // Return the byte array
         }
 
+        lateinit var mediaImage: Image
+
         @SuppressLint("UnsafeExperimentalUsageError")
         @RequiresApi(Build.VERSION_CODES.KITKAT)
         override fun analyze(imageProxy: ImageProxy) {
 
-            val currentTimestamp = System.currentTimeMillis()
-            // Calculate the average luma no more often than every second
-            if (currentTimestamp - lastAnalyzedTimestamp >= 500) {
+                mediaImage = imageProxy.image!!
 
-                imageProxy.image.let { _mediaImage ->
+                val inputImage =
+                    InputImage.fromMediaImage(mediaImage!!, imageProxy.imageInfo.rotationDegrees)
 
-                    InputImage.fromMediaImage(
-                            _mediaImage!!,
-                            imageProxy.imageInfo.rotationDegrees
-                    ).let { _image ->
+                val result = scanner.process(inputImage)
+                // Pass image to an ML Kit Vision API
+                result.addOnSuccessListener { barcodes ->
 
-                        // Pass image to an ML Kit Vision API
-                        scanner.process(_image)
-                                .addOnSuccessListener { barcodes ->
-                                    // Task completed successfully
-                                    // ...
+                    // pause or resume scanner
+                    if (pauseScan) return@addOnSuccessListener
 
-                                    // pause or resume scanner
-                                    if (pauseScan) return@addOnSuccessListener
+                    for (barcode in barcodes) {
+                        val bounds = barcode.boundingBox
+                        val corners = barcode.cornerPoints
 
-                                    for (barcode in barcodes) {
-                                        val bounds = barcode.boundingBox
-                                        val corners = barcode.cornerPoints
+                        val rawValue = barcode.rawValue
 
-                                        val rawValue = barcode.rawValue
+                        log("Scan Codes : Bounds = $bounds, Corners = $corners, RawValue = $rawValue ")
 
-                                        log("Scan Codes : Bounds = $bounds, Corners = $corners, RawValue = $rawValue ")
+                        rawValue?.let {
+                            if (barCodeValue != it) {
+                                listener(it)
+                            }
+                            // store value
+                            barCodeValue = it
+                        }
 
-                                        rawValue?.let {
-                                            if (barCodeValue != it) {
-                                                listener(it)
-                                            }
-                                            // store value
-                                            barCodeValue = it
-
-                                        }
-
-                                        // additional data retrieve
-                                        /*  val valueType = barcode.valueType
-                                          // See API reference for complete list of supported types
-                                          when (valueType) {
-                                              Barcode.TYPE_WIFI -> {
-                                                  val ssid = barcode.wifi!!.ssid
-                                                  val password = barcode.wifi!!.password
-                                                  val type = barcode.wifi!!.encryptionType
-                                              }
-                                              Barcode.TYPE_URL -> {
-                                                  val title = barcode.url!!.title
-                                                  val url = barcode.url!!.url
-                                              }
-                                          }*/
-                                    }
-
-                                }
-                                .addOnFailureListener {
-                                    // Task failed with an exception
-//                                    it.printStackTrace()
-
-                                    // clear data
-//                                barCodeValue = ""
-                                    log("analyze: Older value removed")
-                                }
-                                .addOnCompleteListener {
-                                    try {
-                                        if (it?.result?.isEmpty()!!) {
-                                            barCodeValue = ""       // clear data
-                                            log("analyze: Older value Completed : ${it?.result}")
-                                        }
-                                    } catch (e: Exception) {
-                                        loge(e.message!!)
-                                    }
-
-                                }
 
                     }
 
                 }
+                 .addOnFailureListener {
+                        // Task failed with an exception
+                        if (printLog)
+                            it.printStackTrace()
+                 }
+                 .addOnCompleteListener {
+                        try {
 
-                val buffer = imageProxy.planes[0].buffer
-                val data = buffer.toByteArray()
-                val pixels = data.map { it.toInt() and 0xFF }
-                val luma = pixels.average()
+                            mediaImage.close()
+                            imageProxy.close()
 
-                listener("0")
+                            if (!it?.result?.isEmpty()!!) {
+                                barCodeValue = ""       // clear data
+                                log("analyze: Older value removed : ${it?.result}")
+                            }
+
+                        } catch (e: Exception) {
+                            loge(e.message!!)
+                        }
+                 }
 
 
-                // Update timestamp of last analyzed frame
-                lastAnalyzedTimestamp = currentTimestamp
-            }
 
-            imageProxy.close()
         }
 
     }
@@ -365,10 +344,10 @@ object Scanner {
         return this
     }
 
-    fun cameraSelect(Camera:Int): Scanner {
-        cameraSelector = if(Camera == BackCamera){
+    fun cameraSelect(Camera: Int): Scanner {
+        cameraSelector = if (Camera == BackCamera) {
             CameraSelector.DEFAULT_BACK_CAMERA
-        }else{
+        } else {
             CameraSelector.DEFAULT_FRONT_CAMERA
         }
         // restart camera

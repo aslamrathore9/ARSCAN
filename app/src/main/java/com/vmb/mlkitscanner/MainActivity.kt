@@ -11,6 +11,7 @@ import kotlinx.android.synthetic.main.activity_main.*
 class MainActivity : AppCompatActivity(), ScannerListener {
 
     var pause: Boolean = false
+    var cameraMode: Boolean = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -20,6 +21,7 @@ class MainActivity : AppCompatActivity(), ScannerListener {
                 .checkCodeExists(false)
                 .setResolution(Scanner.Low_Resolution)
                 .logPrint(true)
+            .muteBeepSound(false)
 
         scannerPreView.setOnClickListener {
             if(pause){
@@ -28,6 +30,17 @@ class MainActivity : AppCompatActivity(), ScannerListener {
             }else{
                 pause = true
                 Scanner.resumeScan()
+            }
+        }
+
+        flipCamera.setOnClickListener {
+            if(cameraMode){
+                cameraMode = false
+                Scanner.cameraSelect(Scanner.FrontCamera)
+            }
+            else{
+                cameraMode = true
+                Scanner.cameraSelect(Scanner.BackCamera)
             }
         }
 
