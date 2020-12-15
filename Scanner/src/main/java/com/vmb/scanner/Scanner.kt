@@ -190,11 +190,17 @@ object Scanner {
     private fun scanSuccess(luma: String, scannerListener: ScannerListener) {
         log("Scan Code : $luma")
 
-        scanCodes.add(luma)
-        scannerListener.onSuccess(luma)
+        try {
+            scanCodes.add(luma)
+            scannerListener.onSuccess(luma)
 
-        if (!mutePlayer)
-            mediaPlayer?.start()
+            if (!mutePlayer)
+                mediaPlayer?.start()
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
     }
 
     private class LuminosityAnalyzer(private val listener: LumaListener) : ImageAnalysis.Analyzer {
@@ -220,59 +226,58 @@ object Scanner {
         @RequiresApi(Build.VERSION_CODES.KITKAT)
         override fun analyze(imageProxy: ImageProxy) {
 
-                mediaImage = imageProxy.image!!
+            mediaImage = imageProxy.image!!
 
-                val inputImage =
-                    InputImage.fromMediaImage(mediaImage!!, imageProxy.imageInfo.rotationDegrees)
+            val inputImage =
+                InputImage.fromMediaImage(mediaImage!!, imageProxy.imageInfo.rotationDegrees)
 
-                val result = scanner.process(inputImage)
-                // Pass image to an ML Kit Vision API
-                result.addOnSuccessListener { barcodes ->
+            val result = scanner.process(inputImage)
+            // Pass image to an ML Kit Vision API
+            result.addOnSuccessListener { barcodes ->
 
-                    // pause or resume scanner
-                    if (pauseScan) return@addOnSuccessListener
+                // pause or resume scanner
+                if (pauseScan) return@addOnSuccessListener
 
-                    for (barcode in barcodes) {
-                        val bounds = barcode.boundingBox
-                        val corners = barcode.cornerPoints
+                for (barcode in barcodes) {
+                    val bounds = barcode.boundingBox
+                    val corners = barcode.cornerPoints
 
-                        val rawValue = barcode.rawValue
+                    val rawValue = barcode.rawValue
 
-                        log("Scan Codes : Bounds = $bounds, Corners = $corners, RawValue = $rawValue ")
+                    log("Scan Codes : Bounds = $bounds, Corners = $corners, RawValue = $rawValue ")
 
-                        rawValue?.let {
-                            if (barCodeValue != it) {
-                                listener(it)
-                            }
-                            // store value
-                            barCodeValue = it
+                    rawValue?.let {
+                        if (barCodeValue != it) {
+                            listener(it)
                         }
-
-
+                        // store value
+                        barCodeValue = it
                     }
 
+
                 }
-                 .addOnFailureListener {
-                        // Task failed with an exception
-                        if (printLog)
-                            it.printStackTrace()
-                 }
-                 .addOnCompleteListener {
-                        try {
 
-                            mediaImage.close()
-                            imageProxy.close()
+            }
+                .addOnFailureListener {
+                    // Task failed with an exception
+                    if (printLog)
+                        it.printStackTrace()
+                }
+                .addOnCompleteListener {
+                    try {
 
-                            if (!it?.result?.isEmpty()!!) {
-                                barCodeValue = ""       // clear data
-                                log("analyze: Older value removed : ${it?.result}")
-                            }
+                        mediaImage.close()
+                        imageProxy.close()
 
-                        } catch (e: Exception) {
-                            loge(e.message!!)
+                        if (!it?.result?.isEmpty()!!) {
+                            barCodeValue = ""       // clear data
+                            log("analyze: Older value removed : ${it?.result}")
                         }
-                 }
 
+                    } catch (e: Exception) {
+                        loge(e.message!!)
+                    }
+                }
 
 
         }
