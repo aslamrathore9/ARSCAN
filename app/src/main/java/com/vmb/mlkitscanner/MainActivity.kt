@@ -23,7 +23,7 @@ class MainActivity : AppCompatActivity(), ScannerListener {
                 .logPrint(true)
             .muteBeepSound(false)
 
-        scannerPreView.setOnClickListener {
+      /*  scannerPreView.setOnClickListener {
             if(pause){
                 pause = false
                 Scanner.pauseScan()
@@ -31,6 +31,10 @@ class MainActivity : AppCompatActivity(), ScannerListener {
                 pause = true
                 Scanner.resumeScan()
             }
+        }*/
+
+        flash.setOnClickListener {
+            Scanner.toggleTorch()
         }
 
         flipCamera.setOnClickListener {

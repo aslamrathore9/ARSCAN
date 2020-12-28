@@ -46,6 +46,7 @@ typealias LumaListener = (luma: String) -> Unit
  *      7. cameraSelect
  *      8. setBeepSound
  *      9. scanDelayTime
+ *      10.toggleTorch
  */
 
 object Scanner {
@@ -81,6 +82,11 @@ object Scanner {
     private var cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
     val FrontCamera = 101
     val BackCamera = 102
+
+    // camera controller
+    private lateinit var cameraControl: CameraControl
+    // camera Information
+    lateinit var cameraInfo: CameraInfo
 
     private var isCheckCodeExists: Boolean = true
 
@@ -199,13 +205,17 @@ object Scanner {
                 cameraProvider?.unbindAll()
 
                 // Bind use cases to camera
-                cameraProvider?.bindToLifecycle(
+               val camera = cameraProvider?.bindToLifecycle(
                     lifecycleOwner,
                     cameraSelector,
                     preview,
                     imageCapture,
                     imageAnalyzer
                 )
+
+                // camera control
+                cameraControl = camera?.cameraControl!!
+                cameraInfo = camera.cameraInfo
 
             } catch (exc: Exception) {
                 loge("Use case binding failed  $exc")
@@ -341,6 +351,7 @@ object Scanner {
      *      7. cameraSelect
      *      8. setBeepSound
      *      9. scanDelayTime
+     *      10. toggleTorch
      */
 
     fun pauseScan() {
@@ -400,6 +411,17 @@ object Scanner {
      */
     fun scanDelayTime(delayMilliSeconds: Long){
         scannerDelay = delayMilliSeconds
+    }
+
+    /**
+     *   Switch ON / OFF Torch
+     */
+    fun toggleTorch() {
+        if (cameraInfo.torchState.value == TorchState.ON) {
+            cameraControl.enableTorch(false)
+        } else {
+            cameraControl.enableTorch(true)
+        }
     }
 
 }
