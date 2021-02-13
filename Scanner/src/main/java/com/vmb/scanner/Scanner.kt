@@ -49,6 +49,7 @@ typealias LumaListener = (luma: String) -> Unit
  *      10.toggleTorch
  */
 
+@SuppressLint("StaticFieldLeak")
 object Scanner {
 
     private const val TAG = "Scanner"
