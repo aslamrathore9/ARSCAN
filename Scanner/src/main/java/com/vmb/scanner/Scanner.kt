@@ -166,7 +166,7 @@ object Scanner {
             val preview = Preview.Builder()
                 .build()
                 .also {
-                    it.setSurfaceProvider(viewFinder.createSurfaceProvider())
+                    it.setSurfaceProvider(viewFinder.surfaceProvider)
                 }
 
             if (imageCapture == null)
