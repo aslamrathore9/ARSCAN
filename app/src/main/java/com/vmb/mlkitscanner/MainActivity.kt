@@ -20,7 +20,7 @@ class MainActivity : AppCompatActivity(), ScannerListener {
         Scanner.startScanner(this, scannerPreView, this)
                 .checkCodeExists(false)
                 .setResolution(Scanner.Low_Resolution)
-                .logPrint(true)
+                .logPrint(false)
             .muteBeepSound(false)
 
       /*  scannerPreView.setOnClickListener {
@@ -40,11 +40,11 @@ class MainActivity : AppCompatActivity(), ScannerListener {
         flipCamera.setOnClickListener {
             if(cameraMode){
                 cameraMode = false
-                Scanner.cameraSelect(Scanner.FrontCamera)
+                Scanner.cameraSelect(this, Scanner.FrontCamera)
             }
             else{
                 cameraMode = true
-                Scanner.cameraSelect(Scanner.BackCamera)
+                Scanner.cameraSelect(this, Scanner.BackCamera)
             }
         }
 

@@ -49,13 +49,11 @@ typealias LumaListener = (luma: String) -> Unit
  *      10.toggleTorch
  */
 
-@SuppressLint("StaticFieldLeak")
 object Scanner {
 
     private const val TAG = "Scanner"
     const val Already_Code_Scanned = "Already Code Scanned"
 
-    private lateinit var context: Context
     private lateinit var viewFinder: PreviewView
     private lateinit var scannerListener: ScannerListener
 
@@ -67,12 +65,11 @@ object Scanner {
 
     private var imageCapture: ImageCapture? = null
 
-    private var cameraProvider: ProcessCameraProvider? = null
-
     private lateinit var outputDirectory: File
     private lateinit var cameraExecutor: ExecutorService
 
-    private val scanCodes = ArrayList<String>()
+    // scanned code list
+    val scanCodes = ArrayList<String>()
     private var pauseScan: Boolean = false
 
     var mediaPlayer: MediaPlayer? = null
@@ -121,8 +118,6 @@ object Scanner {
         scannerListener: ScannerListener
     ): Scanner {
 
-        // set context
-        this.context = context
         this.viewFinder = viewFinder
         this.scannerListener = scannerListener
 
@@ -159,8 +154,7 @@ object Scanner {
 
         cameraProviderFuture.addListener(Runnable {
             // Used to bind the lifecycle of cameras to the lifecycle owner
-            if (cameraProvider == null)
-                cameraProvider = cameraProviderFuture.get()
+              val cameraProvider = cameraProviderFuture.get()
 
             // Preview
             val preview = Preview.Builder()
@@ -243,7 +237,6 @@ object Scanner {
     }
 
     private class LuminosityAnalyzer(private val listener: LumaListener) : ImageAnalysis.Analyzer {
-        private var lastAnalyzedTimestamp = 0L
 
         private val options = BarcodeScannerOptions.Builder()
             .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
@@ -259,18 +252,14 @@ object Scanner {
             return data // Return the byte array
         }
 
-        lateinit var mediaImage: Image
-
-        @SuppressLint("UnsafeExperimentalUsageError")
+        @SuppressLint("UnsafeOptInUsageError")
         @RequiresApi(Build.VERSION_CODES.KITKAT)
         override fun analyze(imageProxy: ImageProxy) {
 
-            mediaImage = imageProxy.image!!
-
-            val inputImage =
-                InputImage.fromMediaImage(mediaImage!!, imageProxy.imageInfo.rotationDegrees)
+            val inputImage = InputImage.fromMediaImage(imageProxy.image!!, imageProxy.imageInfo.rotationDegrees)
 
             val result = scanner.process(inputImage)
+
             // Pass image to an ML Kit Vision API
             result.addOnSuccessListener { barcodes ->
 
@@ -297,28 +286,25 @@ object Scanner {
                 }
 
             }
-                .addOnFailureListener {
-                    // Task failed with an exception
-                    if (printLog)
-                        it.printStackTrace()
-                }
-                .addOnCompleteListener {
-                    try {
+            .addOnFailureListener {
+                // Task failed with an exception
+                if (printLog)
+                    it.printStackTrace()
+            }
+            .addOnCompleteListener {
+                try {
 
-                        mediaImage.close()
-                        imageProxy.close()
+                    imageProxy.close()
 
-                        if (!it?.result?.isEmpty()!!) {
-                            barCodeValue = ""       // clear data
-                            log("analyze: Older value removed : ${it?.result}")
-                        }
-
-                    } catch (e: Exception) {
-                        loge(e.message!!)
+                    if (!it.result.isEmpty()) {
+                        barCodeValue = ""       // clear data
+                        log("analyze: Older value removed : ${it.result}")
                     }
+
+                } catch (e: Exception) {
+                    loge(e.message!!)
                 }
-
-
+            }
         }
 
     }
@@ -326,6 +312,9 @@ object Scanner {
     fun destroyScanner() {
         if (this::cameraExecutor.isInitialized)
             cameraExecutor.shutdown()
+
+        scanCodes.clear()
+
         log("onDestroy: Scanner")
     }
 
@@ -356,8 +345,6 @@ object Scanner {
      */
 
     fun pauseScan() {
-        // Unbind use cases before rebinding
-//        cameraProvider?.unbindAll()
         pauseScan = true
         log("Scanner is Paused")
     }
@@ -390,7 +377,7 @@ object Scanner {
         return this
     }
 
-    fun cameraSelect(Camera: Int): Scanner {
+    fun cameraSelect(context: Context, Camera: Int): Scanner {
         cameraSelector = if (Camera == BackCamera) {
             CameraSelector.DEFAULT_BACK_CAMERA
         } else {
@@ -402,8 +389,12 @@ object Scanner {
         return this
     }
 
+    /**
+     *  eg:.  val afd = assets.openFd("AudioFile.mp3")
+     *        setBeepSound(afd)
+    * */
     fun setBeepSound(afd: AssetFileDescriptor): Scanner {
-        mediaPlayer?.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength())
+        mediaPlayer?.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
         return this
     }
 
