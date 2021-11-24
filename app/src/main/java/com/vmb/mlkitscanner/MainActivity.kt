@@ -17,10 +17,10 @@ class MainActivity : AppCompatActivity(), ScannerListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        Scanner.startScanner(this, scannerPreView, this)
+        Scanner.startScanner(this, scannerPreView, this, true)
                 .checkCodeExists(false)
                 .setResolution(Scanner.Low_Resolution)
-                .logPrint(false)
+                .logPrint(true)
             .muteBeepSound(false)
 
       /*  scannerPreView.setOnClickListener {

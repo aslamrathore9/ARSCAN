@@ -6,11 +6,14 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.AssetFileDescriptor
-import android.media.Image
 import android.media.MediaPlayer
 import android.os.Build
 import android.util.Log
 import android.util.Size
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
+import android.view.View
+import androidx.annotation.Nullable
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
@@ -19,15 +22,24 @@ import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.google.android.gms.tasks.Task
 import com.google.mlkit.vision.barcode.Barcode
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.objects.ObjectDetection
+import com.google.mlkit.vision.objects.ObjectDetector
+import com.google.mlkit.vision.objects.defaults.ObjectDetectorOptions
+import com.google.mlkit.vision.text.Text
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.TextRecognizer
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.io.File
 import java.nio.ByteBuffer
 import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.regex.Pattern
 import kotlin.collections.ArrayList
 
 
@@ -67,6 +79,13 @@ object Scanner {
 
     private lateinit var outputDirectory: File
     private lateinit var cameraExecutor: ExecutorService
+
+    // OCR enable check
+    private var enableOCR: Boolean = false
+    // Text recognizer
+    private lateinit var recognizer: TextRecognizer
+    // Object detector
+    private lateinit var objectDetector: ObjectDetector
 
     // scanned code list
     val scanCodes = ArrayList<String>()
@@ -115,7 +134,8 @@ object Scanner {
     fun startScanner(
         context: Context,
         viewFinder: PreviewView,
-        scannerListener: ScannerListener
+        scannerListener: ScannerListener,
+        @Nullable enableOCR:Boolean = false
     ): Scanner {
 
         this.viewFinder = viewFinder
@@ -129,6 +149,24 @@ object Scanner {
             camera_resolution = Low_Resolution
             mediaPlayer(context)
             camera(context, context as AppCompatActivity, viewFinder, scannerListener)
+
+            // Secondary scan will be OCR
+            if(enableOCR) {
+                // enable OCR for entire class
+                this.enableOCR = enableOCR
+                // OCR
+                recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+
+                // Live detection and tracking
+                val options = ObjectDetectorOptions.Builder()
+                    .setDetectorMode(ObjectDetectorOptions.STREAM_MODE)
+                    .enableClassification()  // Optional
+                    .build()
+
+                // Object detection
+                objectDetector = ObjectDetection.getClient(options)
+            }
+
         } else {
             log("Permissions not granted by the user.")
             ActivityCompat.requestPermissions(
@@ -141,6 +179,7 @@ object Scanner {
         return this
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     private fun camera(
         context: Context,
         lifecycleOwner: LifecycleOwner,
@@ -192,8 +231,6 @@ object Scanner {
                     })
                 }
 
-            // Select back camera as a default
-//            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
             try {
                 // Unbind use cases before rebinding
@@ -207,6 +244,60 @@ object Scanner {
                     imageCapture,
                     imageAnalyzer
                 )
+
+                // Listen to pinch gestures
+                val listener = object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                    override fun onScale(detector: ScaleGestureDetector): Boolean {
+                        // Get the camera's current zoom ratio
+                        val currentZoomRatio = camera!!.cameraInfo.zoomState.value?.zoomRatio ?: 0F
+
+                        // Get the pinch gesture's scaling factor
+                        val delta = detector.scaleFactor
+
+                        // Update the camera's zoom ratio. This is an asynchronous operation that returns
+                        // a ListenableFuture, allowing you to listen to when the operation completes.
+                        cameraControl.setZoomRatio(currentZoomRatio * delta)
+
+                        // Return true, as the event was handled
+                        return true
+                    }
+                }
+
+                // Zoom gesture detector
+                val scaleGestureDetector = ScaleGestureDetector(context, listener)
+
+                // Listen to tap events on the viewfinder and set them as focus regions
+                viewFinder.setOnTouchListener(View.OnTouchListener { _: View, motionEvent: MotionEvent ->
+                    // Zoom gesture
+                    scaleGestureDetector.onTouchEvent(motionEvent)
+
+                    when (motionEvent.action) {
+                        MotionEvent.ACTION_DOWN -> return@OnTouchListener true
+                        MotionEvent.ACTION_UP -> {
+                            // Get the MeteringPointFactory from PreviewView
+                            val factory = viewFinder.meteringPointFactory
+
+                            // Create a MeteringPoint from the tap coordinates
+                            val point = factory.createPoint(motionEvent.x, motionEvent.y)
+
+                            // Create a MeteringAction from the MeteringPoint, you can configure it to specify the metering mode
+                            val action = FocusMeteringAction.Builder(point).build()
+
+                            // Trigger the focus and metering. The method returns a ListenableFuture since the operation
+                            // is asynchronous. You can use it get notified when the focus is successful or if it fails.
+                            camera!!.cameraControl.startFocusAndMetering(action)
+
+                            // zoom on focus by 10%
+                            // percentage [0.0f .. 1.0f]
+//                            for(i in 1..30)
+//                            cameraControl.setLinearZoom(((camera.cameraInfo.zoomState.value?.zoomRatio ?: 0F) * i/100).toFloat())
+
+                            return@OnTouchListener true
+                        }
+                        else -> return@OnTouchListener false
+                    }
+
+                })
 
                 // camera control
                 cameraControl = camera?.cameraControl!!
@@ -258,55 +349,166 @@ object Scanner {
 
             val inputImage = InputImage.fromMediaImage(imageProxy.image!!, imageProxy.imageInfo.rotationDegrees)
 
-            val result = scanner.process(inputImage)
+           /*
+            *  *************************** Barcode and QR Scan Process engine ************************************
+            * */
 
             // Pass image to an ML Kit Vision API
-            result.addOnSuccessListener { barcodes ->
+            scanner.process(inputImage)
+                .addOnSuccessListener { barcodes ->
 
                 // pause or resume scanner
                 if (pauseScan) return@addOnSuccessListener
 
-                for (barcode in barcodes) {
-                    val bounds = barcode.boundingBox
-                    val corners = barcode.cornerPoints
+                    if(barcodes.isNotEmpty()) {
+                        for (barcode in barcodes) {
+                            val bounds = barcode.boundingBox
+                            val corners = barcode.cornerPoints
 
-                    val rawValue = barcode.rawValue
+                            val rawValue = barcode.rawValue
 
-                    log("Scan Codes : Bounds = $bounds, Corners = $corners, RawValue = $rawValue ")
+                            log("Scan Codes : Bounds = $bounds, Corners = $corners, RawValue = $rawValue ")
 
-                    rawValue?.let {
-                        if (barCodeValue != it) {
-                            listener(it)
+                            rawValue?.let {
+                                if (barCodeValue != it) {
+                                    listener(it)
+                                }
+                                // store value
+                                barCodeValue = it
+                            }
                         }
-                        // store value
-                        barCodeValue = it
+
+                    }else{
+
+                        log("Scan Codes : No Scan code found")
+
+                        if(enableOCR) {
+                            /*
+                             *  *************************** OCR Process engine ************************************
+                             * */
+
+                            recognizer.process(inputImage)
+                                .addOnSuccessListener { visionText ->
+                                    // Task completed successfully
+
+                                    val blocks = visionText.textBlocks
+
+                                    if (blocks.isEmpty()) {
+                                        log("OCR Codes : No text found")
+//                                        return@addOnSuccessListener
+                                    }else {
+
+                                        for (i in blocks.indices) {
+                                            val lines: List<Text.Line> = blocks[i].lines
+                                            for (j in lines.indices) {
+                                                val elements: List<Text.Element> = lines[j].elements
+
+                                                val finalString = getLongestString(elements)
+                                                if (barCodeValue != finalString) {
+                                                    listener(finalString.toString())
+                                                }
+                                                // store value
+                                                barCodeValue = finalString.toString()
+
+//                                                for (k in elements.indices) {
+//                                                    log("OCR Codes : ${elements[k].text} ")
+//                                                }
+                                            }
+                                        }
+                                    }
+
+                                }
+                                .addOnFailureListener { e ->
+                                    // Task failed with an exception
+                                    loge(e.message.toString())
+                                }
+                                .addOnCompleteListener {
+                                    try {
+
+                                        imageProxy.close()
+
+                                        if (it.result.text.isNotEmpty()) {
+                                            barCodeValue = ""       // clear data
+                                            log("analyze OCR : Older value removed : ${it.result}")
+                                        }
+
+                                    } catch (e: Exception) {
+                                        loge(e.message!!)
+                                    }
+                                }
+                        }
                     }
 
-
-                }
-
             }
-            .addOnFailureListener {
+                .addOnFailureListener {
                 // Task failed with an exception
                 if (printLog)
                     it.printStackTrace()
+                loge("Scanner failed")
             }
-            .addOnCompleteListener {
+                .addOnCompleteListener {
                 try {
 
-                    imageProxy.close()
+                    if(!enableOCR)
+                        imageProxy.close()
 
-                    if (!it.result.isEmpty()) {
+                    if (it.result.isNotEmpty()) {
                         barCodeValue = ""       // clear data
-                        log("analyze: Older value removed : ${it.result}")
+                        log("analyze: Older value removed : ${it.result[0]}")
+                        imageProxy.close()
                     }
 
                 } catch (e: Exception) {
                     loge(e.message!!)
                 }
             }
+
+
+
+         /*
+          *  *************************** Object detection Process engine ************************************
+          * */
+           /* objectDetector.process(inputImage)
+                .addOnSuccessListener { detectedObjects ->
+                    // Task completed successfully
+                    for (detectedObject in detectedObjects) {
+                        val boundingBox = detectedObject.boundingBox
+                        val trackingId = detectedObject.trackingId
+                        for (label in detectedObject.labels) {
+                            val text = label.text
+                            val confidence = label.confidence
+                            log("Object : $text")
+
+                        }
+                        log("Object : Top:${boundingBox.top}, Bottom:${boundingBox.bottom}, Left:${boundingBox.left}, Right:${boundingBox.right}")
+                    }
+                }
+                .addOnFailureListener { e ->
+                    // Task failed with an exception
+                    loge(e.message.toString())
+                }.addOnCompleteListener {
+                    imageProxy.close()
+                }*/
+
         }
 
+    }
+
+    private val regex = "^[a-zA-Z0-9]+$"
+    private val pattern: Pattern = Pattern.compile(regex)
+
+    fun getLongestString(array: List<Text.Element>): String? {
+        var maxLength = 0
+        var longestString: String? = ""
+        for (s in array) {
+            if(pattern.matcher(s.text).matches()) {
+                if (s.text.length > maxLength) {
+                    maxLength = s.text.length
+                    longestString = s.text
+                }
+            }
+        }
+        return longestString
     }
 
     fun destroyScanner() {

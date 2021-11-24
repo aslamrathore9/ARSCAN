@@ -51,8 +51,13 @@ dependencies {
     // CameraX View class
     api "androidx.camera:camera-view:1.0.0-alpha30"
     // MLKit Scanner
-//    implementation 'com.google.android.gms:play-services-mlkit-barcode-scanning:16.1.2'
+    implementation 'com.google.android.gms:play-services-mlkit-barcode-scanning:16.2.1'
     // Use this dependency to bundle the model with your app
-    implementation 'com.google.mlkit:barcode-scanning:17.0.0'
+//    implementation 'com.google.mlkit:barcode-scanning:17.0.0'
+
+    // MLKit Scanner
+    implementation 'com.google.android.gms:play-services-mlkit-text-recognition:17.0.0'
+
+    implementation 'com.google.mlkit:object-detection:16.2.7'
 
 }
