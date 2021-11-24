@@ -287,10 +287,6 @@ object Scanner {
                             // is asynchronous. You can use it get notified when the focus is successful or if it fails.
                             camera!!.cameraControl.startFocusAndMetering(action)
 
-                            // zoom on focus by 10%
-                            // percentage [0.0f .. 1.0f]
-//                            for(i in 1..30)
-//                            cameraControl.setLinearZoom(((camera.cameraInfo.zoomState.value?.zoomRatio ?: 0F) * i/100).toFloat())
 
                             return@OnTouchListener true
                         }
@@ -349,126 +345,127 @@ object Scanner {
 
             val inputImage = InputImage.fromMediaImage(imageProxy.image!!, imageProxy.imageInfo.rotationDegrees)
 
+            // pause or resume scanner
+            if (!pauseScan) {
+
            /*
             *  *************************** Barcode and QR Scan Process engine ************************************
             * */
 
-            // Pass image to an ML Kit Vision API
-            scanner.process(inputImage)
-                .addOnSuccessListener { barcodes ->
+                // Pass image to an ML Kit Vision API
+                scanner.process(inputImage)
+                    .addOnSuccessListener { barcodes ->
 
-                // pause or resume scanner
-                if (pauseScan) return@addOnSuccessListener
 
-                    if(barcodes.isNotEmpty()) {
-                        for (barcode in barcodes) {
-                            val bounds = barcode.boundingBox
-                            val corners = barcode.cornerPoints
+                        if (barcodes.isNotEmpty()) {
+                            for (barcode in barcodes) {
+                                val bounds = barcode.boundingBox
+                                val corners = barcode.cornerPoints
 
-                            val rawValue = barcode.rawValue
+                                val rawValue = barcode.rawValue
 
-                            log("Scan Codes : Bounds = $bounds, Corners = $corners, RawValue = $rawValue ")
+                                log("Scan Codes : Bounds = $bounds, Corners = $corners, RawValue = $rawValue ")
 
-                            rawValue?.let {
-                                if (barCodeValue != it) {
-                                    listener(it)
+                                rawValue?.let {
+                                    if (barCodeValue != it) {
+                                        listener(it)
+                                    }
+                                    // store value
+                                    barCodeValue = it
                                 }
-                                // store value
-                                barCodeValue = it
                             }
-                        }
 
-                    }else{
+                        } else {
 
-                        log("Scan Codes : No Scan code found")
+                            log("Scan Codes : No Scan code found")
 
-                        if(enableOCR) {
-                            /*
+                            if (enableOCR) {
+                                /*
                              *  *************************** OCR Process engine ************************************
                              * */
 
-                            recognizer.process(inputImage)
-                                .addOnSuccessListener { visionText ->
-                                    // Task completed successfully
+                                recognizer.process(inputImage)
+                                    .addOnSuccessListener { visionText ->
+                                        // Task completed successfully
 
-                                    val blocks = visionText.textBlocks
+                                        val blocks = visionText.textBlocks
 
-                                    if (blocks.isEmpty()) {
-                                        log("OCR Codes : No text found")
+                                        if (blocks.isEmpty()) {
+                                            log("OCR Codes : No text found")
 //                                        return@addOnSuccessListener
-                                    }else {
+                                        } else {
 
-                                        for (i in blocks.indices) {
-                                            val lines: List<Text.Line> = blocks[i].lines
-                                            for (j in lines.indices) {
-                                                val elements: List<Text.Element> = lines[j].elements
+                                            for (i in blocks.indices) {
+                                                val lines: List<Text.Line> = blocks[i].lines
+                                                for (j in lines.indices) {
+                                                    val elements: List<Text.Element> =
+                                                        lines[j].elements
 
-                                                val finalString = getLongestString(elements)
-                                                if (barCodeValue != finalString) {
-                                                    listener(finalString.toString())
-                                                }
-                                                // store value
-                                                barCodeValue = finalString.toString()
+                                                    val finalString = getLongestString(elements)
+                                                    if (barCodeValue != finalString) {
+                                                        listener(finalString.toString())
+                                                    }
+                                                    // store value
+                                                    barCodeValue = finalString.toString()
 
 //                                                for (k in elements.indices) {
 //                                                    log("OCR Codes : ${elements[k].text} ")
 //                                                }
+                                                }
                                             }
                                         }
+
                                     }
+                                    .addOnFailureListener { e ->
+                                        // Task failed with an exception
+                                        loge(e.message.toString())
+                                    }
+                                    .addOnCompleteListener {
+                                        try {
 
-                                }
-                                .addOnFailureListener { e ->
-                                    // Task failed with an exception
-                                    loge(e.message.toString())
-                                }
-                                .addOnCompleteListener {
-                                    try {
+                                            imageProxy.close()
 
-                                        imageProxy.close()
+                                            if (it.result.text.isNotEmpty()) {
+                                                barCodeValue = ""       // clear data
+                                                log("analyze OCR : Older value removed : ${it.result.text}")
+                                            }
 
-                                        if (it.result.text.isNotEmpty()) {
-                                            barCodeValue = ""       // clear data
-                                            log("analyze OCR : Older value removed : ${it.result}")
+                                        } catch (e: Exception) {
+                                            loge(e.message!!)
                                         }
-
-                                    } catch (e: Exception) {
-                                        loge(e.message!!)
                                     }
-                                }
+                            }
+                        }
+
+                    }
+                    .addOnFailureListener {
+                        // Task failed with an exception
+                        if (printLog)
+                            it.printStackTrace()
+                        loge("Scanner failed")
+                    }
+                    .addOnCompleteListener {
+                        try {
+
+                            if (!enableOCR)
+                                imageProxy.close()
+
+                            if (it.result.isNotEmpty()) {
+                                barCodeValue = ""       // clear data
+                                log("analyze: Older value removed : ${it.result[0]}")
+                                imageProxy.close()
+                            }
+
+                        } catch (e: Exception) {
+                            loge(e.message!!)
                         }
                     }
-
-            }
-                .addOnFailureListener {
-                // Task failed with an exception
-                if (printLog)
-                    it.printStackTrace()
-                loge("Scanner failed")
-            }
-                .addOnCompleteListener {
-                try {
-
-                    if(!enableOCR)
-                        imageProxy.close()
-
-                    if (it.result.isNotEmpty()) {
-                        barCodeValue = ""       // clear data
-                        log("analyze: Older value removed : ${it.result[0]}")
-                        imageProxy.close()
-                    }
-
-                } catch (e: Exception) {
-                    loge(e.message!!)
-                }
-            }
-
 
 
          /*
           *  *************************** Object detection Process engine ************************************
           * */
-           /* objectDetector.process(inputImage)
+                /* objectDetector.process(inputImage)
                 .addOnSuccessListener { detectedObjects ->
                     // Task completed successfully
                     for (detectedObject in detectedObjects) {
@@ -489,6 +486,10 @@ object Scanner {
                 }.addOnCompleteListener {
                     imageProxy.close()
                 }*/
+
+            }else{
+                log("Scanner paused")
+            }
 
         }
 
