@@ -23,7 +23,7 @@ class MainActivity : AppCompatActivity(), ScannerListener {
                 .logPrint(true)
             .muteBeepSound(false)
 
-      /*  scannerPreView.setOnClickListener {
+        flipCamera.setOnClickListener {
             if(pause){
                 pause = false
                 Scanner.pauseScan()
@@ -31,12 +31,12 @@ class MainActivity : AppCompatActivity(), ScannerListener {
                 pause = true
                 Scanner.resumeScan()
             }
-        }*/
+        }
 
         flash.setOnClickListener {
             Scanner.toggleTorch()
         }
-
+/*
         flipCamera.setOnClickListener {
             if(cameraMode){
                 cameraMode = false
@@ -46,7 +46,7 @@ class MainActivity : AppCompatActivity(), ScannerListener {
                 cameraMode = true
                 Scanner.cameraSelect(this, Scanner.BackCamera)
             }
-        }
+        }*/
 
 //        Scanner.muteBeepSound(true)
 //        val afd = assets.openFd("AudioFile.mp3")

@@ -88,8 +88,7 @@ object Scanner {
     private lateinit var objectDetector: ObjectDetector
 
     // scanned code list
-    val scanCodes = ArrayList<String>()
-    private var pauseScan: Boolean = false
+    var scanCodes = ArrayList<String>()
 
     var mediaPlayer: MediaPlayer? = null
     private var mutePlayer: Boolean = false
@@ -100,6 +99,8 @@ object Scanner {
     val FrontCamera = 101
     val BackCamera = 102
 
+    // ImageAnalyzer
+    private lateinit var imageAnalyzer: ImageAnalysis
     // camera controller
     private lateinit var cameraControl: CameraControl
     // camera Information
@@ -207,30 +208,12 @@ object Scanner {
                     .setTargetResolution(camera_resolution)
                     .build()
 
-            val imageAnalyzer = ImageAnalysis.Builder()
+              imageAnalyzer = ImageAnalysis.Builder()
                 .setImageQueueDepth(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
-                .also {
-                    it.setAnalyzer(cameraExecutor, LuminosityAnalyzer { luma ->
 
-                        val currentTimestamp = System.currentTimeMillis()
-                        // get
-                        if (currentTimestamp - lastAnalyzedTimestamp >= scannerDelay) {
-                            if (luma != "0" && !isCheckCodeExists) {
-                                scanSuccess(luma, scannerListener)
-                            } else if (luma != "0" && !scanCodes.contains(luma)) {
-                                scanSuccess(luma, scannerListener)
-                            } else if (scanCodes.contains(luma)) {
-                                loge("Scan Code : $luma $Already_Code_Scanned")
-                                scannerListener.onFailed(Already_Code_Scanned)
-                            }
-
-                            // Update timestamp of last analyzed frame
-                            lastAnalyzedTimestamp = currentTimestamp
-                        }
-                    })
-                }
-
+            // set ImageAnalysis
+             setScannerAnalyzer(scannerListener)
 
             try {
                 // Unbind use cases before rebinding
@@ -307,6 +290,27 @@ object Scanner {
 
     }
 
+    private fun setScannerAnalyzer(scannerListener: ScannerListener) {
+        imageAnalyzer.setAnalyzer(cameraExecutor, LuminosityAnalyzer { luma ->
+
+            val currentTimestamp = System.currentTimeMillis()
+            // get
+            if (currentTimestamp - lastAnalyzedTimestamp >= scannerDelay) {
+                if (luma != "0" && !isCheckCodeExists) {
+                    scanSuccess(luma, scannerListener)
+                } else if (luma != "0" && !scanCodes.contains(luma)) {
+                    scanSuccess(luma, scannerListener)
+                } else if (scanCodes.contains(luma)) {
+                    loge("Scan Code : $luma $Already_Code_Scanned")
+                    scannerListener.onFailed(Already_Code_Scanned)
+                }
+
+                // Update timestamp of last analyzed frame
+                lastAnalyzedTimestamp = currentTimestamp
+            }
+        })
+    }
+
     private fun scanSuccess(luma: String, scannerListener: ScannerListener) {
         log("Scan Code : $luma")
 
@@ -345,151 +349,145 @@ object Scanner {
 
             val inputImage = InputImage.fromMediaImage(imageProxy.image!!, imageProxy.imageInfo.rotationDegrees)
 
-            // pause or resume scanner
-            if (!pauseScan) {
+            /*
+             *  *************************** Barcode and QR Scan Process engine ************************************
+             * */
 
-           /*
-            *  *************************** Barcode and QR Scan Process engine ************************************
-            * */
-
-                // Pass image to an ML Kit Vision API
-                scanner.process(inputImage)
-                    .addOnSuccessListener { barcodes ->
+            // Pass image to an ML Kit Vision API
+            scanner.process(inputImage)
+                .addOnSuccessListener { barcodes ->
 
 
-                        if (barcodes.isNotEmpty()) {
-                            for (barcode in barcodes) {
-                                val bounds = barcode.boundingBox
-                                val corners = barcode.cornerPoints
+                    if (barcodes.isNotEmpty()) {
+                        for (barcode in barcodes) {
+                            val bounds = barcode.boundingBox
+                            val corners = barcode.cornerPoints
 
-                                val rawValue = barcode.rawValue
+                            val rawValue = barcode.rawValue
 
-                                log("Scan Codes : Bounds = $bounds, Corners = $corners, RawValue = $rawValue ")
+                            log("Scan Codes : Bounds = $bounds, Corners = $corners, RawValue = $rawValue ")
 
-                                rawValue?.let {
-                                    if (barCodeValue != it) {
-                                        listener(it)
-                                    }
-                                    // store value
-                                    barCodeValue = it
+                            rawValue?.let {
+                                if (barCodeValue != it) {
+                                    listener(it)
                                 }
+                                // store value
+                                barCodeValue = it
                             }
+                        }
 
-                        } else {
+                    } else {
 
-                            log("Scan Codes : No Scan code found")
+                        log("Scan Codes : No Scan code found")
 
-                            if (enableOCR) {
-                                /*
-                             *  *************************** OCR Process engine ************************************
-                             * */
+                        if (enableOCR) {
+                            /*
+                         *  *************************** OCR Process engine ************************************
+                         * */
 
-                                recognizer.process(inputImage)
-                                    .addOnSuccessListener { visionText ->
-                                        // Task completed successfully
+                            recognizer.process(inputImage)
+                                .addOnSuccessListener { visionText ->
+                                    // Task completed successfully
 
-                                        val blocks = visionText.textBlocks
+                                    val blocks = visionText.textBlocks
 
-                                        if (blocks.isEmpty()) {
-                                            log("OCR Codes : No text found")
-//                                        return@addOnSuccessListener
-                                        } else {
+                                    if (blocks.isEmpty()) {
+                                        log("OCR Codes : No text found")
+                                        //                                        return@addOnSuccessListener
+                                    } else {
 
-                                            for (i in blocks.indices) {
-                                                val lines: List<Text.Line> = blocks[i].lines
-                                                for (j in lines.indices) {
-                                                    val elements: List<Text.Element> =
-                                                        lines[j].elements
+                                        for (i in blocks.indices) {
+                                            val lines: List<Text.Line> = blocks[i].lines
+                                            for (j in lines.indices) {
+                                                val elements: List<Text.Element> = lines[j].elements
 
-                                                    val finalString = getLongestString(elements)
-                                                    if (barCodeValue != finalString) {
-                                                        listener(finalString.toString())
-                                                    }
-                                                    // store value
-                                                    barCodeValue = finalString.toString()
+                                                val finalString = getLongestString(elements)
 
-//                                                for (k in elements.indices) {
-//                                                    log("OCR Codes : ${elements[k].text} ")
-//                                                }
+                                                if (barCodeValue != finalString) {
+                                                    listener(finalString.toString())
                                                 }
+                                                // store value
+                                                barCodeValue = finalString.toString()
+
+                                                //                                                for (k in elements.indices) {
+                                                //                                                    log("OCR Codes : ${elements[k].text} ")
+                                                //                                                }
                                             }
                                         }
-
                                     }
-                                    .addOnFailureListener { e ->
-                                        // Task failed with an exception
-                                        loge(e.message.toString())
-                                    }
-                                    .addOnCompleteListener {
-                                        try {
 
-                                            imageProxy.close()
+                                }
+                                .addOnFailureListener { e ->
+                                    // Task failed with an exception
+                                    loge(e.message.toString())
+                                }
+                                .addOnCompleteListener {
+                                    try {
 
-                                            if (it.result.text.isNotEmpty()) {
-                                                barCodeValue = ""       // clear data
-                                                log("analyze OCR : Older value removed : ${it.result.text}")
-                                            }
+                                        imageProxy.close()
 
-                                        } catch (e: Exception) {
-                                            loge(e.message!!)
+                                        if (it.result.text.isNotEmpty()) {
+                                            barCodeValue = ""       // clear data
+                                            log("analyze OCR : Older value removed : ${it.result.text}")
                                         }
+
+                                    } catch (e: Exception) {
+                                        loge(e.message!!)
                                     }
-                            }
-                        }
-
-                    }
-                    .addOnFailureListener {
-                        // Task failed with an exception
-                        if (printLog)
-                            it.printStackTrace()
-                        loge("Scanner failed")
-                    }
-                    .addOnCompleteListener {
-                        try {
-
-                            if (!enableOCR)
-                                imageProxy.close()
-
-                            if (it.result.isNotEmpty()) {
-                                barCodeValue = ""       // clear data
-                                log("analyze: Older value removed : ${it.result[0]}")
-                                imageProxy.close()
-                            }
-
-                        } catch (e: Exception) {
-                            loge(e.message!!)
+                                }
                         }
                     }
 
+                }
+                .addOnFailureListener {
+                    // Task failed with an exception
+                    if (printLog)
+                        it.printStackTrace()
+                    loge("Scanner failed")
+                }
+                .addOnCompleteListener {
+                    try {
 
-         /*
-          *  *************************** Object detection Process engine ************************************
-          * */
-                /* objectDetector.process(inputImage)
-                .addOnSuccessListener { detectedObjects ->
-                    // Task completed successfully
-                    for (detectedObject in detectedObjects) {
-                        val boundingBox = detectedObject.boundingBox
-                        val trackingId = detectedObject.trackingId
-                        for (label in detectedObject.labels) {
-                            val text = label.text
-                            val confidence = label.confidence
-                            log("Object : $text")
+                        if (!enableOCR)
+                            imageProxy.close()
 
+                        if (it.result.isNotEmpty()) {
+                            barCodeValue = ""       // clear data
+                            log("analyze: Older value removed : ${it.result[0]}")
+                            imageProxy.close()
                         }
-                        log("Object : Top:${boundingBox.top}, Bottom:${boundingBox.bottom}, Left:${boundingBox.left}, Right:${boundingBox.right}")
+
+                    } catch (e: Exception) {
+                        loge(e.message!!)
                     }
                 }
-                .addOnFailureListener { e ->
-                    // Task failed with an exception
-                    loge(e.message.toString())
-                }.addOnCompleteListener {
-                    imageProxy.close()
-                }*/
 
-            }else{
-                log("Scanner paused")
+
+            /*
+             *  *************************** Object detection Process engine ************************************
+             * */
+            /* objectDetector.process(inputImage)
+            .addOnSuccessListener { detectedObjects ->
+                // Task completed successfully
+                for (detectedObject in detectedObjects) {
+                    val boundingBox = detectedObject.boundingBox
+                    val trackingId = detectedObject.trackingId
+                    for (label in detectedObject.labels) {
+                        val text = label.text
+                        val confidence = label.confidence
+                        log("Object : $text")
+
+                    }
+                    log("Object : Top:${boundingBox.top}, Bottom:${boundingBox.bottom}, Left:${boundingBox.left}, Right:${boundingBox.right}")
+                }
             }
+            .addOnFailureListener { e ->
+                // Task failed with an exception
+                loge(e.message.toString())
+            }.addOnCompleteListener {
+                imageProxy.close()
+            }*/
+
 
         }
 
@@ -548,12 +546,12 @@ object Scanner {
      */
 
     fun pauseScan() {
-        pauseScan = true
+        imageAnalyzer.clearAnalyzer()
         log("Scanner is Paused")
     }
 
     fun resumeScan() {
-        pauseScan = false
+        setScannerAnalyzer(scannerListener)
         log("Scanner is Resumed")
     }
 
