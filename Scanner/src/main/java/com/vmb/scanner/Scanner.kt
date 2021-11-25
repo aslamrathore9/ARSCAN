@@ -291,24 +291,26 @@ object Scanner {
     }
 
     private fun setScannerAnalyzer(scannerListener: ScannerListener) {
-        imageAnalyzer.setAnalyzer(cameraExecutor, LuminosityAnalyzer { luma ->
+        if(::imageAnalyzer.isInitialized) {
+            imageAnalyzer.setAnalyzer(cameraExecutor, LuminosityAnalyzer { luma ->
 
-            val currentTimestamp = System.currentTimeMillis()
-            // get
-            if (currentTimestamp - lastAnalyzedTimestamp >= scannerDelay) {
-                if (luma != "0" && !isCheckCodeExists) {
-                    scanSuccess(luma, scannerListener)
-                } else if (luma != "0" && !scanCodes.contains(luma)) {
-                    scanSuccess(luma, scannerListener)
-                } else if (scanCodes.contains(luma)) {
-                    loge("Scan Code : $luma $Already_Code_Scanned")
-                    scannerListener.onFailed(Already_Code_Scanned)
+                val currentTimestamp = System.currentTimeMillis()
+                // get
+                if (currentTimestamp - lastAnalyzedTimestamp >= scannerDelay) {
+                    if (luma != "0" && !isCheckCodeExists) {
+                        scanSuccess(luma, scannerListener)
+                    } else if (luma != "0" && !scanCodes.contains(luma)) {
+                        scanSuccess(luma, scannerListener)
+                    } else if (scanCodes.contains(luma)) {
+                        loge("Scan Code : $luma $Already_Code_Scanned")
+                        scannerListener.onFailed(Already_Code_Scanned)
+                    }
+
+                    // Update timestamp of last analyzed frame
+                    lastAnalyzedTimestamp = currentTimestamp
                 }
-
-                // Update timestamp of last analyzed frame
-                lastAnalyzedTimestamp = currentTimestamp
-            }
-        })
+            })
+        }
     }
 
     private fun scanSuccess(luma: String, scannerListener: ScannerListener) {
@@ -546,13 +548,17 @@ object Scanner {
      */
 
     fun pauseScan() {
-        imageAnalyzer.clearAnalyzer()
-        log("Scanner is Paused")
+        if(::imageAnalyzer.isInitialized) {
+            imageAnalyzer.clearAnalyzer()
+            log("Scanner is Paused")
+        }
     }
 
     fun resumeScan() {
-        setScannerAnalyzer(scannerListener)
-        log("Scanner is Resumed")
+        if(::imageAnalyzer.isInitialized) {
+            setScannerAnalyzer(scannerListener)
+            log("Scanner is Resumed")
+        }
     }
 
     fun checkCodeExists(isCheck: Boolean): Scanner {
