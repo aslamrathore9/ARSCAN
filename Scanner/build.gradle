@@ -25,12 +25,19 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
+
     kotlinOptions {
         jvmTarget = '1.8'
+    }
+
+    aaptOptions {
+        noCompress "tflite"
+        // or noCompress "lite"
     }
 }
 
@@ -58,6 +65,7 @@ dependencies {
     // MLKit Scanner
     implementation 'com.google.android.gms:play-services-mlkit-text-recognition:17.0.0'
 
-    implementation 'com.google.mlkit:object-detection:16.2.7'
+    // Object detection & tracking feature with custom bundled model
+    implementation 'com.google.mlkit:object-detection-custom:16.3.3'
 
 }

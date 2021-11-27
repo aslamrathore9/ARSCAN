@@ -21,7 +21,7 @@ class MainActivity : AppCompatActivity(), ScannerListener {
                 .checkCodeExists(false)
                 .setResolution(Scanner.Low_Resolution)
                 .logPrint(true)
-            .muteBeepSound(false)
+                .muteBeepSound(false)
 
         flipCamera.setOnClickListener {
             if(pause){
