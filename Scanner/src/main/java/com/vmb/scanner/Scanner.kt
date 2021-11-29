@@ -6,6 +6,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.AssetFileDescriptor
+import android.graphics.ImageFormat
 import android.media.MediaPlayer
 import android.os.Build
 import android.util.Log
@@ -18,19 +19,21 @@ import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
 import androidx.camera.core.ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888
-import androidx.camera.core.ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.google.android.odml.image.MlImage
 import com.google.android.odml.image.MlImage.IMAGE_FORMAT_YV21
 import com.google.mlkit.common.model.LocalModel
 import com.google.mlkit.vision.barcode.Barcode
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.objects.ObjectDetection
 import com.google.mlkit.vision.objects.ObjectDetector
+import com.google.mlkit.vision.objects.custom.CustomObjectDetectorOptions
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
@@ -158,8 +161,8 @@ object Scanner {
                 this.enableOCR = enableOCR
                 // OCR
                 recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-
-            /*    val localModel = LocalModel.Builder()
+/*
+                val localModel = LocalModel.Builder()
                     .setAssetFilePath("model.tflite")
                     // or .setAbsoluteFilePath(absolute file path to model file)
                     // or .setUri(URI to model file)
@@ -240,6 +243,9 @@ object Scanner {
 //                    imageCapture,
                     imageAnalyzer
                 )
+
+                // default set zoom 30%
+                camera?.cameraControl?.setLinearZoom(0.5F)
 
                 // Listen to pinch gestures
                 val listener = object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
@@ -362,9 +368,9 @@ object Scanner {
 
                 val inputImage = InputImage.fromMediaImage(imageProxy.image!!, imageProxy.imageInfo.rotationDegrees)
 
-                /*
-             *  *************************** Barcode and QR Scan Process engine ************************************
-             * */
+             /*  *************************** Barcode and QR Scan Process engine ************************************
+             */
+
 
                 // Pass image to an ML Kit Vision API
                 scanner.process(inputImage)
@@ -395,8 +401,9 @@ object Scanner {
 
                             if (enableOCR) {
 
-                                /**  *************************** OCR Process engine ************************************
-                                 */
+/*  *************************** OCR Process engine ************************************/
+
+
 
                                 recognizer.process(inputImage)
                                     .addOnSuccessListener { visionText ->
@@ -449,8 +456,9 @@ object Scanner {
                                         }
                                     }
 
-                                /**  *************************** EOF OCR Process engine ************************************
-                                 */
+/*  *************************** EOF OCR Process engine ************************************/
+
+
 
                             }
                         }
@@ -479,35 +487,33 @@ object Scanner {
                         }
                     }
 
-                /*
-             *  *************************** Object detection Process engine ************************************
-             * */
+             /**  *************************** Object detection Process engine ************************************
+             */
 
-                /* objectDetector.process(inputImage)
-            .addOnSuccessListener { detectedObjects ->
-                // Task completed successfully
-                for (detectedObject in detectedObjects) {
-                    val boundingBox = detectedObject.boundingBox
-                    val trackingId = detectedObject.trackingId
-
-//                    ObjectGraphic(detectedObject = detectedObject, overlay = viewFinder)
-
-                    for (label in detectedObject.labels) {
-                        val text = label.text
-                        val confidence = label.confidence
-                        log("Object : $text")
-
-                    }
-                    log("Object : Top:${boundingBox.top}, Bottom:${boundingBox.bottom}, Left:${boundingBox.left}, Right:${boundingBox.right}")
-                }
-            }
-            .addOnFailureListener { e ->
-                // Task failed with an exception
-                loge(e.message.toString())
-            }.addOnCompleteListener {
-                imageProxy.close()
-            }
-*/
+//           objectDetector.process(inputImage)
+//            .addOnSuccessListener { detectedObjects ->
+//                // Task completed successfully
+//                for (detectedObject in detectedObjects) {
+//                    val boundingBox = detectedObject.boundingBox
+//                    val trackingId = detectedObject.trackingId
+//
+////                    ObjectGraphic(detectedObject = detectedObject, overlay = viewFinder)
+//
+//                    for (label in detectedObject.labels) {
+//                        val text = label.text
+//                        val confidence = label.confidence
+//                        log("Object : $text")
+//
+//                    }
+//                    log("Object : Top:${boundingBox.top}, Bottom:${boundingBox.bottom}, Left:${boundingBox.left}, Right:${boundingBox.right}")
+//                }
+//            }
+//            .addOnFailureListener { e ->
+//                // Task failed with an exception
+//                loge(e.message.toString())
+//            }.addOnCompleteListener {
+//                imageProxy.close()
+//            }
 
                 // Update timestamp of last analyzed frame
                 lastAnalyzedTimestamp = currentTimestamp

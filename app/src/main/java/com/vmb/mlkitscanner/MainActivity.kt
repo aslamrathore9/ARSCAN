@@ -17,11 +17,12 @@ class MainActivity : AppCompatActivity(), ScannerListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        Scanner.startScanner(this, scannerPreView, this, true)
+        Scanner.startScanner(this, scannerPreView, this, false)
                 .checkCodeExists(false)
                 .setResolution(Scanner.Low_Resolution)
                 .logPrint(true)
                 .muteBeepSound(false)
+
 
         flipCamera.setOnClickListener {
             if(pause){
