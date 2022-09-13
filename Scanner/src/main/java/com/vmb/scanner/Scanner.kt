@@ -420,8 +420,9 @@ object Scanner {
                                                 for (j in lines.indices) {
                                                     val elements: List<Text.Element> =
                                                         lines[j].elements
+                                                    Log.d("ajsdkfjfsfdsfsdks",getAllString(elements).toString())
 
-                                                    val finalString = getLongestString(elements)
+                                                    val finalString = getAllString(elements)
 
                                                     if (barCodeValue != finalString) {
                                                         listener(finalString.toString())
@@ -539,6 +540,16 @@ object Scanner {
                     longestString = s.text
                 }
             }
+        }
+        return longestString
+    }
+
+    fun getAllString(array: List<Text.Element>): String? {
+      //  var maxLength = 0
+        var longestString: String? = ""
+        for (s in array) {
+
+            longestString += s.text +" "
         }
         return longestString
     }
