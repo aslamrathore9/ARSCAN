@@ -3,6 +3,7 @@ package com.vmb.mlkitscanner
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.vmb.mlkitscanner.CodeScanSuccessDialog.ComingSoonDialog
 import com.vmb.scanner.Scanner
 import com.vmb.scanner.ScannerListener
 import kotlinx.android.synthetic.main.activity_main.*
@@ -17,18 +18,18 @@ class MainActivity : AppCompatActivity(), ScannerListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        Scanner.startScanner(this, scannerPreView, this, false)
-                .checkCodeExists(false)
-                .setResolution(Scanner.Low_Resolution)
-                .logPrint(true)
-                .muteBeepSound(false)
-
+        Scanner.startScanner(this, scannerPreView, this, true)
+            .checkCodeExists(false)
+            .setResolution(Scanner.Low_Resolution)
+            .logPrint(true)
+            .muteBeepSound(false)
+            .scanDelayTime(1000)
 
         flipCamera.setOnClickListener {
-            if(pause){
+            if (pause) {
                 pause = false
                 Scanner.pauseScan()
-            }else{
+            } else {
                 pause = true
                 Scanner.resumeScan()
             }
@@ -75,6 +76,14 @@ class MainActivity : AppCompatActivity(), ScannerListener {
     }
 
     override fun onSuccess(scanCode: String) {
+        Scanner.pauseScan()
+
+        ComingSoonDialog(this, scanCode, object : CodeScanSuccessDialog.DialogueCallBack {
+            override fun successDialogueCallBack() {
+                Scanner.resumeScan()
+            }
+        })
+
 
     }
 
